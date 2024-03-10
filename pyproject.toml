@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "monkeypie"
+version = "0.1.0"
+description = ""
+authors = ["Rob Kent <rob@gulon.co.uk>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+
+[tool.poetry.group.dev.dependencies]
+parameterized = "^0.9.0"
+mypy = "^1.9.0"
+ruff = "^0.3.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
