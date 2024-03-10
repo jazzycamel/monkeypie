@@ -1,7 +1,13 @@
 import unittest
 from typing import cast
 
-from monkeypie.ast import LetStatement, StatementNode, ReturnStatement
+from monkeypie.ast import (
+    LetStatement,
+    StatementNode,
+    ReturnStatement,
+    ExpressionStatement,
+    IdentifierExpression,
+)
 from monkeypie.lexer import Lexer
 from monkeypie.parser import Parser
 
@@ -59,3 +65,23 @@ return 993322;
         for statement in program.statements:
             self.assertIsInstance(statement, ReturnStatement)
             self.assertEqual(statement.token_literal(), "return")
+
+
+class TestIdentifierExpressions(unittest.TestCase):
+    def test_identifier_expressions(self):
+        input = "foobar;"
+        lexer = Lexer(input)
+        parser = Parser(lexer)
+        program = parser.parse_program()
+        check_parser_errors(self, parser)
+        self.assertIsNotNone(program)
+        self.assertEqual(1, len(program.statements))
+
+        statement = program.statements[0]
+        self.assertIsInstance(statement, ExpressionStatement)
+        statement = cast(ExpressionStatement, statement)
+        identifier = statement.expression
+        self.assertIsInstance(identifier, IdentifierExpression)
+        identifier = cast(IdentifierExpression, identifier)
+        self.assertEqual("foobar", identifier.value)
+        self.assertEqual("foobar", identifier.token_literal())

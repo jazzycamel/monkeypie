@@ -8,17 +8,25 @@ class Node(metaclass=ABCMeta):
     def token_literal(self) -> str:
         raise NotImplementedError
 
+    @abstractmethod
+    def __str__(self) -> str:
+        return ""
+
 
 class StatementNode(Node, metaclass=ABCMeta):
-    @abstractmethod
+    def __init__(self, token: Token):
+        self.token = token
+
     def statement_node(self):
-        raise NotImplementedError
+        pass
+
+    def token_literal(self) -> str:
+        return self.token.literal
 
 
 class ExpressionNode(Node, metaclass=ABCMeta):
-    @abstractmethod
     def expression_node(self):
-        raise NotImplementedError
+        pass
 
 
 class ProgramNode(Node):
@@ -28,14 +36,20 @@ class ProgramNode(Node):
     def token_literal(self) -> str:
         return "".join([str(s) for s in self.statements])
 
+    def __str__(self) -> str:
+        return "".join(str(s) for s in self.statements)
 
-class IdentifierExpression(Node):
+
+class IdentifierExpression(ExpressionNode):
     def __init__(self, token=Token(TokenType.ILLEGAL, ""), value=""):
         self.token = token
         self.value = value
 
     def token_literal(self) -> str:
         return self.token.literal
+
+    def __str__(self) -> str:
+        return self.value
 
 
 class LetStatement(StatementNode):
@@ -45,17 +59,12 @@ class LetStatement(StatementNode):
         name: IdentifierExpression = IdentifierExpression(),
         value: ExpressionNode | None = None,
     ):
-        self.token = token
+        super().__init__(token)
         self.name = name
         self.value = value
 
-    def statement_node(self):
-        pass
-
-    def token_literal(self) -> str:
-        if not self.token:
-            return ""
-        return self.token.literal
+    def __str__(self) -> str:
+        return f"{self.token_literal()} {self.name}{' = '+str(self.value) if self.value else ''};"
 
 
 class ReturnStatement(StatementNode):
@@ -64,13 +73,21 @@ class ReturnStatement(StatementNode):
         token=Token(TokenType.ILLEGAL, ""),
         return_value: ExpressionNode | None = None,
     ):
-        self.token = token
+        super().__init__(token)
         self.return_value = return_value
 
-    def statement_node(self):
-        pass
+    def __str__(self) -> str:
+        return f"{self.token_literal()}{' '+str(self.return_value) if self.return_value else ''};"
 
-    def token_literal(self) -> str:
-        if not self.token:
-            return ""
-        return self.token.literal
+
+class ExpressionStatement(StatementNode):
+    def __init__(
+        self,
+        token=Token(TokenType.ILLEGAL, ""),
+        expression: ExpressionNode | None = None,
+    ):
+        super().__init__(token)
+        self.expression = expression
+
+    def __str__(self) -> str:
+        return ""

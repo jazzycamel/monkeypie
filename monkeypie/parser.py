@@ -1,12 +1,30 @@
+from enum import auto, IntEnum
+from typing import Callable
+
 from monkeypie.ast import (
     ProgramNode,
     StatementNode,
     LetStatement,
     IdentifierExpression,
     ReturnStatement,
+    ExpressionNode,
+    ExpressionStatement,
 )
 from monkeypie.lexer import Lexer
 from monkeypie.token import Token, TokenType
+
+PrefixParseFn = Callable[[], ExpressionNode]
+InfixParseFn = Callable[[ExpressionNode], ExpressionNode]
+
+
+class Precedence(IntEnum):
+    LOWEST = auto()
+    EQUALS = auto()
+    LESS_GREATER = auto()
+    SUM = auto()
+    PRODUCT = auto()
+    PREFIX = auto()
+    CALL = auto()
 
 
 class Parser:
@@ -16,6 +34,11 @@ class Parser:
     def __init__(self, lexer: Lexer):
         self._lexer = lexer
         self._errors: list[str] = []
+
+        self._prefix_parse_functions: dict[TokenType, PrefixParseFn] = {}
+        self._infix_parse_functions: dict[TokenType, InfixParseFn] = {}
+
+        self.register_prefix_parse_function(TokenType.IDENT, self.parse_identifier)
 
         self.next_token()
         self.next_token()
@@ -45,6 +68,16 @@ class Parser:
         self.peek_error(type)
         return False
 
+    def register_prefix_parse_function(
+        self, token_type: TokenType, prefix_parse_function: PrefixParseFn
+    ) -> None:
+        self._prefix_parse_functions[token_type] = prefix_parse_function
+
+    def register_infix_parse_function(
+        self, token_type: TokenType, infix_parse_function: InfixParseFn
+    ) -> None:
+        self._infix_parse_functions[token_type] = infix_parse_function
+
     def parse_program(self) -> ProgramNode | None:
         program = ProgramNode()
         while self.current_token.type != TokenType.EOF:
@@ -61,7 +94,8 @@ class Parser:
                 return self.parse_let_statement()
             case TokenType.RETURN:
                 return self.parse_return_statement()
-        return None
+            case _:
+                return self.parse_expression_statement()
 
     def parse_let_statement(self) -> LetStatement | None:
         statement = LetStatement(self.current_token)
@@ -90,3 +124,21 @@ class Parser:
             self.next_token()
 
         return statement
+
+    def parse_expression_statement(self) -> ExpressionStatement:
+        statement = ExpressionStatement(self.current_token)
+        statement.expression = self.parse_expression(Precedence.LOWEST)
+
+        if self.peek_token_is(TokenType.SEMICOLON):
+            self.next_token()
+        return statement
+
+    def parse_expression(self, precedence: Precedence) -> ExpressionNode | None:
+        try:
+            prefix = self._prefix_parse_functions[self.current_token.type]
+        except KeyError:
+            return None
+        return prefix()
+
+    def parse_identifier(self) -> ExpressionNode:
+        return IdentifierExpression(self.current_token, self.current_token.literal)
