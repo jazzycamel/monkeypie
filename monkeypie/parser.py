@@ -1,5 +1,5 @@
 from enum import auto, IntEnum
-from typing import Callable
+from typing import Callable, Final
 
 from monkeypie.ast import (
     ProgramNode,
@@ -11,6 +11,7 @@ from monkeypie.ast import (
     ExpressionStatement,
     IntegerLiteralExpression,
     PrefixExpression,
+    InfixExpression,
 )
 from monkeypie.lexer import Lexer
 from monkeypie.token import Token, TokenType
@@ -27,6 +28,18 @@ class Precedence(IntEnum):
     PRODUCT = auto()
     PREFIX = auto()
     CALL = auto()
+
+
+PRECEDENCES: Final[dict[TokenType, Precedence]] = {
+    TokenType.EQ: Precedence.EQUALS,
+    TokenType.NOT_EQ: Precedence.EQUALS,
+    TokenType.LT: Precedence.LESS_GREATER,
+    TokenType.GT: Precedence.LESS_GREATER,
+    TokenType.PLUS: Precedence.SUM,
+    TokenType.MINUS: Precedence.SUM,
+    TokenType.SLASH: Precedence.PRODUCT,
+    TokenType.ASTERISK: Precedence.PRODUCT,
+}
 
 
 class Parser:
@@ -51,6 +64,19 @@ class Parser:
             TokenType.MINUS, self.parse_prefix_expression
         )
 
+        self.register_infix_parse_function(TokenType.PLUS, self.parse_infix_expression)
+        self.register_infix_parse_function(TokenType.MINUS, self.parse_infix_expression)
+        self.register_infix_parse_function(TokenType.SLASH, self.parse_infix_expression)
+        self.register_infix_parse_function(
+            TokenType.ASTERISK, self.parse_infix_expression
+        )
+        self.register_infix_parse_function(TokenType.EQ, self.parse_infix_expression)
+        self.register_infix_parse_function(
+            TokenType.NOT_EQ, self.parse_infix_expression
+        )
+        self.register_infix_parse_function(TokenType.LT, self.parse_infix_expression)
+        self.register_infix_parse_function(TokenType.GT, self.parse_infix_expression)
+
         self.next_token()
         self.next_token()
 
@@ -71,6 +97,18 @@ class Parser:
         self._errors.append(
             f"expected next token to be {type}, got {self.peek_token.type} instead"
         )
+
+    def peek_precedence(self) -> Precedence:
+        try:
+            return PRECEDENCES[self.peek_token.type]
+        except KeyError:
+            return Precedence.LOWEST
+
+    def current_precedence(self) -> Precedence:
+        try:
+            return PRECEDENCES[self.current_token.type]
+        except KeyError:
+            return Precedence.LOWEST
 
     def expect_peek(self, type: TokenType) -> bool:
         if self.peek_token_is(type):
@@ -139,7 +177,6 @@ class Parser:
     def parse_expression_statement(self) -> ExpressionStatement:
         statement = ExpressionStatement(self.current_token)
         statement.expression = self.parse_expression(Precedence.LOWEST)
-
         if self.peek_token_is(TokenType.SEMICOLON):
             self.next_token()
         return statement
@@ -152,7 +189,22 @@ class Parser:
                 f"no prefix parse function found for {self.current_token.type.value} found"
             )
             return None
-        return prefix()
+
+        left = prefix()
+        if not left:
+            return None
+        while (
+            not self.peek_token_is(TokenType.SEMICOLON)
+            and precedence < self.peek_precedence()
+        ):
+            try:
+                infix = self._infix_parse_functions[self.peek_token.type]
+            except KeyError:
+                return left
+            self.next_token()
+            left = infix(left)
+
+        return left
 
     def parse_identifier(self) -> ExpressionNode:
         return IdentifierExpression(self.current_token, self.current_token.literal)
@@ -173,4 +225,13 @@ class Parser:
         expression = PrefixExpression(self.current_token, self.current_token.literal)
         self.next_token()
         expression.right = self.parse_expression(Precedence.PREFIX)
+        return expression
+
+    def parse_infix_expression(self, left: ExpressionNode) -> ExpressionNode:
+        expression = InfixExpression(
+            self.current_token, left, self.current_token.literal
+        )
+        precedence = self.current_precedence()
+        self.next_token()
+        expression.right = self.parse_expression(precedence)
         return expression

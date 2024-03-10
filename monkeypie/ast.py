@@ -90,7 +90,7 @@ class ExpressionStatement(StatementNode):
         self.expression = expression
 
     def __str__(self) -> str:
-        return ""
+        return str(self.expression) if self.expression else ""
 
 
 class IntegerLiteralExpression(ExpressionNode):
@@ -121,3 +121,23 @@ class PrefixExpression(ExpressionNode):
 
     def __str__(self) -> str:
         return f"({self.operator}{str(self.right)})"
+
+
+class InfixExpression(ExpressionNode):
+    def __init__(
+        self,
+        token=Token(TokenType.ILLEGAL, ""),
+        left: ExpressionNode | None = None,
+        operator: str = "",
+        right: ExpressionNode | None = None,
+    ):
+        self.token = token
+        self.left = left
+        self.operator = operator
+        self.right = right
+
+    def token_literal(self) -> str:
+        return self.token.literal
+
+    def __str__(self) -> str:
+        return f"({str(self.left)} {str(self.operator)} {str(self.right)})"

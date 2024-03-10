@@ -1,7 +1,7 @@
 import unittest
 from typing import cast
 
-from parameterized import parameterized  # type: ignore
+from parameterized import parameterized
 
 from monkeypie.ast import (
     LetStatement,
@@ -12,6 +12,7 @@ from monkeypie.ast import (
     IntegerLiteralExpression,
     PrefixExpression,
     ExpressionNode,
+    InfixExpression,
 )
 from monkeypie.lexer import Lexer
 from monkeypie.parser import Parser
@@ -142,3 +143,67 @@ class TestParsingPrefixExpressions(unittest.TestCase):
         expression = cast(PrefixExpression, expression)
         self.assertEqual(operator, expression.operator)
         self.assertTrue(test_integer_literal(self, expression.right, value))
+
+
+class TestParsingInfixExpressions(unittest.TestCase):
+    @parameterized.expand(
+        [
+            ("5 + 5;", 5, "+", 5),
+            ("5 - 5;", 5, "-", 5),
+            ("5 * 5;", 5, "*", 5),
+            ("5 / 5;", 5, "/", 5),
+            ("5 > 5;", 5, ">", 5),
+            ("5 < 5;", 5, "<", 5),
+            ("5 == 5;", 5, "==", 5),
+            ("5 != 5;", 5, "!=", 5),
+        ]
+    )
+    def test_parsing_infix_expressions(
+        self, input: str, left: int, operator: str, right: int
+    ):
+        lexer = Lexer(input)
+        parser = Parser(lexer)
+        program = parser.parse_program()
+        check_parser_errors(self, parser)
+        self.assertIsNotNone(program)
+        if not program:
+            return
+        self.assertEqual(1, len(program.statements))
+
+        statement = program.statements[0]
+        self.assertIsInstance(statement, ExpressionStatement)
+        statement = cast(ExpressionStatement, statement)
+        expression = statement.expression
+        self.assertIsInstance(expression, InfixExpression)
+        expression = cast(InfixExpression, expression)
+        self.assertTrue(test_integer_literal(self, expression.left, left))
+        self.assertEqual(operator, expression.operator)
+        self.assertTrue(test_integer_literal(self, expression.right, right))
+
+
+class TestOperatorPrecedenceParsing(unittest.TestCase):
+    @parameterized.expand(
+        [
+            ("-a * b", "((-a) * b)"),
+            ("!-a", "(!(-a))"),
+            ("a + b + c", "((a + b) + c)"),
+            ("a + b - c", "((a + b) - c)"),
+            ("a * b * c", "((a * b) * c)"),
+            ("a * b / c", "((a * b) / c)"),
+            ("a + b / c", "(a + (b / c))"),
+            ("a + b * c + d / e - f", "(((a + (b * c)) + (d / e)) - f)"),
+            ("3 + 4; -5 * 5", "(3 + 4)((-5) * 5)"),
+            ("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
+            ("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"),
+            ("3 + 4 * 5 == 3 * 1 + 4 * 5", "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))"),
+        ]
+    )
+    def test_operator_precedence_parsing(self, input: str, expected: str):
+        lexer = Lexer(input)
+        parser = Parser(lexer)
+        program = parser.parse_program()
+        check_parser_errors(self, parser)
+        self.assertIsNotNone(program)
+        if not program:
+            return
+        self.assertEqual(expected, str(program))

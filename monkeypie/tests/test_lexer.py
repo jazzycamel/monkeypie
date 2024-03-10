@@ -1,6 +1,6 @@
 import unittest
 
-from parameterized import parameterized  # type: ignore
+from parameterized import parameterized
 
 from ..lexer import Lexer
 from ..token import TokenType
