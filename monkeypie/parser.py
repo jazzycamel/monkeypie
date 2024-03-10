@@ -9,11 +9,13 @@ from monkeypie.ast import (
     ReturnStatement,
     ExpressionNode,
     ExpressionStatement,
+    IntegerLiteralExpression,
+    PrefixExpression,
 )
 from monkeypie.lexer import Lexer
 from monkeypie.token import Token, TokenType
 
-PrefixParseFn = Callable[[], ExpressionNode]
+PrefixParseFn = Callable[[], ExpressionNode | None]
 InfixParseFn = Callable[[ExpressionNode], ExpressionNode]
 
 
@@ -39,6 +41,15 @@ class Parser:
         self._infix_parse_functions: dict[TokenType, InfixParseFn] = {}
 
         self.register_prefix_parse_function(TokenType.IDENT, self.parse_identifier)
+        self.register_prefix_parse_function(
+            TokenType.INT, self.parse_integer_literal_expression
+        )
+        self.register_prefix_parse_function(
+            TokenType.BANG, self.parse_prefix_expression
+        )
+        self.register_prefix_parse_function(
+            TokenType.MINUS, self.parse_prefix_expression
+        )
 
         self.next_token()
         self.next_token()
@@ -137,8 +148,29 @@ class Parser:
         try:
             prefix = self._prefix_parse_functions[self.current_token.type]
         except KeyError:
+            self._errors.append(
+                f"no prefix parse function found for {self.current_token.type.value} found"
+            )
             return None
         return prefix()
 
     def parse_identifier(self) -> ExpressionNode:
         return IdentifierExpression(self.current_token, self.current_token.literal)
+
+    def parse_integer_literal_expression(self) -> ExpressionNode | None:
+        literal = IntegerLiteralExpression(self.current_token)
+
+        try:
+            literal.value = int(self.current_token.literal)
+            return literal
+        except ValueError:
+            self._errors.append(
+                f"could not parse {self.current_token.literal} as integer"
+            )
+            return None
+
+    def parse_prefix_expression(self) -> ExpressionNode:
+        expression = PrefixExpression(self.current_token, self.current_token.literal)
+        self.next_token()
+        expression.right = self.parse_expression(Precedence.PREFIX)
+        return expression

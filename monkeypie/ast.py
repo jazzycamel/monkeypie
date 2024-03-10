@@ -41,7 +41,7 @@ class ProgramNode(Node):
 
 
 class IdentifierExpression(ExpressionNode):
-    def __init__(self, token=Token(TokenType.ILLEGAL, ""), value=""):
+    def __init__(self, token=Token(TokenType.ILLEGAL, ""), value: str = ""):
         self.token = token
         self.value = value
 
@@ -91,3 +91,33 @@ class ExpressionStatement(StatementNode):
 
     def __str__(self) -> str:
         return ""
+
+
+class IntegerLiteralExpression(ExpressionNode):
+    def __init__(self, token=Token(TokenType.ILLEGAL, ""), value: int = 0):
+        self.token = token
+        self.value: int = value
+
+    def token_literal(self) -> str:
+        return self.token.literal
+
+    def __str__(self) -> str:
+        return self.token.literal
+
+
+class PrefixExpression(ExpressionNode):
+    def __init__(
+        self,
+        token=Token(TokenType.ILLEGAL, ""),
+        operator: str = "",
+        right: ExpressionNode | None = None,
+    ):
+        self.token = token
+        self.operator = operator
+        self.right = right
+
+    def token_literal(self) -> str:
+        return self.token.literal
+
+    def __str__(self) -> str:
+        return f"({self.operator}{str(self.right)})"
