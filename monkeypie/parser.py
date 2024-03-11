@@ -15,6 +15,8 @@ from monkeypie.ast import (
     PrefixExpression,
     InfixExpression,
     BooleanLiteralExpression,
+    IfExpression,
+    BlockStatement,
 )
 from monkeypie.lexer import Lexer
 from monkeypie.token import Token, TokenType
@@ -101,6 +103,7 @@ class Parser:
         self.register_prefix_parse_function(
             TokenType.LPAREN, self.parse_grouped_expression
         )
+        self.register_prefix_parse_function(TokenType.IF, self.parse_if_expression)
 
         self.register_infix_parse_function(TokenType.PLUS, self.parse_infix_expression)
         self.register_infix_parse_function(TokenType.MINUS, self.parse_infix_expression)
@@ -292,3 +295,36 @@ class Parser:
         if not self.expect_peek(TokenType.RPAREN):
             return None
         return expression
+
+    @Trace
+    def parse_if_expression(self) -> ExpressionNode | None:
+        expression = IfExpression(self.current_token)
+        if not self.expect_peek(TokenType.LPAREN):
+            return None
+        self.next_token()
+        expression.condition = self.parse_expression(Precedence.LOWEST)
+        if not self.expect_peek(TokenType.RPAREN):
+            return None
+        if not self.expect_peek(TokenType.LBRACE):
+            return None
+        expression.consequence = self.parse_block_statement()
+
+        if self.peek_token_is(TokenType.ELSE):
+            self.next_token()
+            if not self.expect_peek(TokenType.LBRACE):
+                return None
+            expression.alternative = self.parse_block_statement()
+        return expression
+
+    @Trace
+    def parse_block_statement(self) -> StatementNode | None:
+        block = BlockStatement(self.current_token)
+        self.next_token()
+        while not self.current_token_is(TokenType.RBRACE) and not self.current_token_is(
+            TokenType.EOF
+        ):
+            statement = self.parse_statement()
+            if statement:
+                block.statements.append(statement)
+            self.next_token()
+        return block

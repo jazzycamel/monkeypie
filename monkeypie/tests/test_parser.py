@@ -15,6 +15,7 @@ from monkeypie.ast import (
     InfixExpression,
     ProgramNode,
     BooleanLiteralExpression,
+    IfExpression,
 )
 from monkeypie.lexer import Lexer
 from monkeypie.parser import Parser
@@ -250,3 +251,49 @@ class TestBooleanLiteralExpressions(ParserTestCase):
         statement = cast(ExpressionStatement, statement)
         assert statement.expression is not None
         self._test_boolean_literal(statement.expression, expected)
+
+
+class TestIfExpressions(ParserTestCase):
+    def test_if_expression(self):
+        input = "if (x < y) { x }"
+        program = self._test_execution(input, 1)
+
+        statement = program.statements[0]
+        self.assertIsInstance(statement, ExpressionStatement)
+        statement = cast(ExpressionStatement, statement)
+        expression = statement.expression
+        self.assertIsInstance(expression, IfExpression)
+        expression = cast(IfExpression, expression)
+        self.assertTrue(
+            self._test_infix_expression(expression.condition, "x", "<", "y")
+        )
+        self.assertEqual(1, len(expression.consequence.statements))
+        consequence = expression.consequence.statements[0]
+        self.assertIsInstance(consequence, ExpressionStatement)
+        consequence = cast(ExpressionStatement, consequence)
+        self.assertTrue(self._test_identifier_literal(consequence.expression, "x"))
+        self.assertIsNone(expression.alternative)
+
+    def test_if_else_expression(self):
+        input = "if (x < y) { x } else { y }"
+        program = self._test_execution(input, 1)
+
+        statement = program.statements[0]
+        self.assertIsInstance(statement, ExpressionStatement)
+        statement = cast(ExpressionStatement, statement)
+        expression = statement.expression
+        self.assertIsInstance(expression, IfExpression)
+        expression = cast(IfExpression, expression)
+        self.assertTrue(
+            self._test_infix_expression(expression.condition, "x", "<", "y")
+        )
+        self.assertEqual(1, len(expression.consequence.statements))
+        consequence = expression.consequence.statements[0]
+        self.assertIsInstance(consequence, ExpressionStatement)
+        consequence = cast(ExpressionStatement, consequence)
+        self.assertTrue(self._test_identifier_literal(consequence.expression, "x"))
+        self.assertEqual(1, len(expression.alternative.statements))
+        alternative = expression.alternative.statements[0]
+        self.assertIsInstance(alternative, ExpressionStatement)
+        alternative = cast(ExpressionStatement, alternative)
+        self.assertTrue(self._test_identifier_literal(alternative.expression, "y"))

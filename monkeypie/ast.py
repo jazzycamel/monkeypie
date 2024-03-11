@@ -155,3 +155,38 @@ class BooleanLiteralExpression(ExpressionNode):
 
     def __str__(self) -> str:
         return self.token.literal
+
+
+class BlockStatement(StatementNode):
+    def __init__(self, token: Token = Token(TokenType.ILLEGAL, "")):
+        super().__init__(token)
+        self.statements: list[StatementNode] = []
+
+    def token_literal(self) -> str:
+        return self.token.literal
+
+    def __str__(self) -> str:
+        return "".join(str(s) for s in self.statements)
+
+
+class IfExpression(ExpressionNode):
+    def __init__(
+        self,
+        token: Token = Token(TokenType.ILLEGAL, ""),
+        condition: ExpressionNode | None = None,
+        consequence: BlockStatement = BlockStatement(),
+        alternative: BlockStatement | None = None,
+    ):
+        self.token = token
+        self.condition = condition
+        self.consequence = consequence
+        self.alternative = alternative
+
+    def token_literal(self) -> str:
+        return self.token.literal
+
+    def __str__(self) -> str:
+        out = f"if {str(self.condition)} {str(self.consequence)}"
+        if self.alternative:
+            out += f" else {str(self.alternative)}"
+        return out
