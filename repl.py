@@ -2,20 +2,46 @@ import getpass
 from typing import Final
 
 from monkeypie.lexer import Lexer
-from monkeypie.token import TokenType
+from monkeypie.parser import Parser
+
 
 PROMPT: Final[str] = ">> "
+MONKEY_FACE: Final[str] = r'''
+           __,__
+  .--.  .-"     "-.  .--.
+ / .. \/  .-. .-.  \/ .. \
+| |  '|  /   Y   \  |'  | |
+| \   \  \ 0 | 0 /  /   / |
+ \ '- ,\.-"""""""-./, -' /
+  ''-' /_   ^ ^   _\ '-''
+      |  \._   _./  |
+      \   \ '~' /   /
+       '._ '-=-' _.'
+          '-----'
+'''
 
 
-def start_repl() -> None:
-    while True:
-        line = input(PROMPT)
-        lexer = Lexer(line)
+class REPL:
+    @staticmethod
+    def print_parser_errors(errors: list[str]) -> None:
+        print(MONKEY_FACE)
+        print("Woops! We ran into some monkey business here!")
+        print(" parser errors:")
+        for error in errors:
+            print("\t" + error)
 
-        token = lexer.next_token()
-        while token.type != TokenType.EOF:
-            print(token)
-            token = lexer.next_token()
+    @staticmethod
+    def start_repl() -> None:
+        while True:
+            line = input(PROMPT)
+            lexer = Lexer(line)
+            parser = Parser(lexer)
+            program = parser.parse_program()
+            if len(errors := parser.errors()):
+                REPL.print_parser_errors(errors)
+                continue
+
+            print(program)
 
 
 if __name__ == "__main__":
@@ -23,6 +49,6 @@ if __name__ == "__main__":
     print("Feel free to type commands (Ctrl+C to quit)")
 
     try:
-        start_repl()
+        REPL.start_repl()
     except KeyboardInterrupt:
         pass
