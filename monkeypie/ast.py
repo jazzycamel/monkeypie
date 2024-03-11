@@ -190,3 +190,21 @@ class IfExpression(ExpressionNode):
         if self.alternative:
             out += f" else {str(self.alternative)}"
         return out
+
+
+class FunctionLiteralExpression(ExpressionNode):
+    def __init__(
+        self,
+        token: Token = Token(TokenType.ILLEGAL, ""),
+        parameters: list[IdentifierExpression] = [],
+        body: BlockStatement = BlockStatement(),
+    ):
+        self.token = token
+        self.parameters = parameters
+        self.body = body
+
+    def token_literal(self) -> str:
+        return self.token.literal
+
+    def __str__(self) -> str:
+        return f"{self.token.literal}({', '.join(str(p) for p in self.parameters)}) {str(self.body)}"

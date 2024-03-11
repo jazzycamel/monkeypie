@@ -16,6 +16,7 @@ from monkeypie.ast import (
     ProgramNode,
     BooleanLiteralExpression,
     IfExpression,
+    FunctionLiteralExpression,
 )
 from monkeypie.lexer import Lexer
 from monkeypie.parser import Parser
@@ -297,3 +298,46 @@ class TestIfExpressions(ParserTestCase):
         self.assertIsInstance(alternative, ExpressionStatement)
         alternative = cast(ExpressionStatement, alternative)
         self.assertTrue(self._test_identifier_literal(alternative.expression, "y"))
+
+
+class TestFunctionLiteralExpressions(ParserTestCase):
+    def test_function_literal_parsing(self):
+        input = "fn(x, y) { x + y; }"
+        program = self._test_execution(input, 1)
+
+        statement = program.statements[0]
+        self.assertIsInstance(statement, ExpressionStatement)
+        statement = cast(ExpressionStatement, statement)
+        expression = statement.expression
+        self.assertIsInstance(expression, FunctionLiteralExpression)
+        expression = cast(FunctionLiteralExpression, expression)
+        self.assertEqual(2, len(expression.parameters))
+        self.assertTrue(self._test_literal_expression(expression.parameters[0], "x"))
+        self.assertTrue(self._test_literal_expression(expression.parameters[1], "y"))
+        self.assertEqual(1, len(expression.body.statements))
+        body = expression.body.statements[0]
+        self.assertIsInstance(body, ExpressionStatement)
+        body = cast(ExpressionStatement, body)
+        self.assertTrue(self._test_infix_expression(body.expression, "x", "+", "y"))
+
+    @parameterized.expand(
+        [
+            ("fn() {}", []),
+            ("fn(x) {}", ["x"]),
+            ("fn(x, y, z) {}", ["x", "y", "z"]),
+        ]
+    )
+    def test_function_parameter_parsing(self, input: str, expectedParams: list[str]):
+        program = self._test_execution(input, 1)
+
+        statement = program.statements[0]
+        self.assertIsInstance(statement, ExpressionStatement)
+        statement = cast(ExpressionStatement, statement)
+        expression = statement.expression
+        self.assertIsInstance(expression, FunctionLiteralExpression)
+        expression = cast(FunctionLiteralExpression, expression)
+        self.assertEqual(len(expectedParams), len(expression.parameters))
+        for i, expected in enumerate(expectedParams):
+            self.assertTrue(
+                self._test_literal_expression(expression.parameters[i], expected)
+            )

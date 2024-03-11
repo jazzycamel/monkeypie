@@ -17,6 +17,7 @@ from monkeypie.ast import (
     BooleanLiteralExpression,
     IfExpression,
     BlockStatement,
+    FunctionLiteralExpression,
 )
 from monkeypie.lexer import Lexer
 from monkeypie.token import Token, TokenType
@@ -104,6 +105,9 @@ class Parser:
             TokenType.LPAREN, self.parse_grouped_expression
         )
         self.register_prefix_parse_function(TokenType.IF, self.parse_if_expression)
+        self.register_prefix_parse_function(
+            TokenType.FUNCTION, self.parse_function_literal
+        )
 
         self.register_infix_parse_function(TokenType.PLUS, self.parse_infix_expression)
         self.register_infix_parse_function(TokenType.MINUS, self.parse_infix_expression)
@@ -328,3 +332,35 @@ class Parser:
                 block.statements.append(statement)
             self.next_token()
         return block
+
+    @Trace
+    def parse_function_literal(self) -> ExpressionNode | None:
+        literal = FunctionLiteralExpression(self.current_token)
+        if not self.expect_peek(TokenType.LPAREN):
+            return None
+        literal.parameters = self.parse_function_parameters()
+        if not self.expect_peek(TokenType.LBRACE):
+            return None
+        literal.body = self.parse_block_statement()
+        return literal
+
+    def parse_function_parameters(self) -> list[IdentifierExpression]:
+        identifiers: list[IdentifierExpression] = []
+        if self.peek_token_is(TokenType.RPAREN):
+            self.next_token()
+            return identifiers
+        self.next_token()
+        identifier = IdentifierExpression(
+            self.current_token, self.current_token.literal
+        )
+        identifiers.append(identifier)
+        while self.peek_token_is(TokenType.COMMA):
+            self.next_token()
+            self.next_token()
+            identifier = IdentifierExpression(
+                self.current_token, self.current_token.literal
+            )
+            identifiers.append(identifier)
+        if not self.expect_peek(TokenType.RPAREN):
+            return []
+        return identifiers
