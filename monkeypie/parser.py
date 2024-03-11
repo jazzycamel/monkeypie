@@ -1,4 +1,6 @@
+import os
 from enum import auto, IntEnum
+from functools import partial
 from typing import Callable, Final
 
 from monkeypie.ast import (
@@ -40,6 +42,32 @@ PRECEDENCES: Final[dict[TokenType, Precedence]] = {
     TokenType.SLASH: Precedence.PRODUCT,
     TokenType.ASTERISK: Precedence.PRODUCT,
 }
+
+
+class Trace:
+    level: int = 0
+
+    def __init__(self, wrapped: Callable):
+        self._wrapped = wrapped
+        if os.environ.get("MONKEYPIE_PARSE_TRACE_ENABLED", None):
+            self._action = self._trace_action
+        else:
+            self._action = self._wrapped
+
+    def __get__(self, instance, owner):
+        return partial(self.__call__, instance)
+
+    def __call__(self, *args, **kwargs):
+        return self._action(*args, **kwargs)
+
+    def _trace_action(self, *args, **kwargs):
+        Trace.level += 1
+        indent = "\t" * (Trace.level - 1)
+        print(f"{indent}BEGIN:", self._wrapped.__name__, args[1:], kwargs)
+        result = self._wrapped(*args, **kwargs)
+        print(f"{indent}END:", self._wrapped.__name__)
+        Trace.level -= 1
+        return result
 
 
 class Parser:
@@ -174,6 +202,7 @@ class Parser:
 
         return statement
 
+    @Trace
     def parse_expression_statement(self) -> ExpressionStatement:
         statement = ExpressionStatement(self.current_token)
         statement.expression = self.parse_expression(Precedence.LOWEST)
@@ -181,6 +210,7 @@ class Parser:
             self.next_token()
         return statement
 
+    @Trace
     def parse_expression(self, precedence: Precedence) -> ExpressionNode | None:
         try:
             prefix = self._prefix_parse_functions[self.current_token.type]
@@ -209,6 +239,7 @@ class Parser:
     def parse_identifier(self) -> ExpressionNode:
         return IdentifierExpression(self.current_token, self.current_token.literal)
 
+    @Trace
     def parse_integer_literal_expression(self) -> ExpressionNode | None:
         literal = IntegerLiteralExpression(self.current_token)
 
@@ -221,12 +252,14 @@ class Parser:
             )
             return None
 
+    @Trace
     def parse_prefix_expression(self) -> ExpressionNode:
         expression = PrefixExpression(self.current_token, self.current_token.literal)
         self.next_token()
         expression.right = self.parse_expression(Precedence.PREFIX)
         return expression
 
+    @Trace
     def parse_infix_expression(self, left: ExpressionNode) -> ExpressionNode:
         expression = InfixExpression(
             self.current_token, left, self.current_token.literal

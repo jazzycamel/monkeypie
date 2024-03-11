@@ -30,7 +30,7 @@ class ExpressionNode(Node, metaclass=ABCMeta):
 
 
 class ProgramNode(Node):
-    def __init__(self):
+    def __init__(self) -> None:
         self.statements: list[StatementNode] = []
 
     def token_literal(self) -> str:

@@ -13,31 +13,80 @@ from monkeypie.ast import (
     PrefixExpression,
     ExpressionNode,
     InfixExpression,
+    ProgramNode,
 )
 from monkeypie.lexer import Lexer
 from monkeypie.parser import Parser
 
 
-def check_parser_errors(test_case: unittest.TestCase, parser: Parser) -> None:
-    errors = parser.errors()
-    if len(errors) == 0:
-        return
-    test_case.assertEqual(
-        0, len(errors), "\n".join([f"parser error: {e}" for e in errors])
-    )
+class ParserTestCase(unittest.TestCase):
+    def check_parser_errors(self, parser: Parser) -> None:
+        errors = parser.errors()
+        if len(errors) == 0:
+            return
+        self.assertEqual(
+            0, len(errors), "\n".join([f"parser error: {e}" for e in errors])
+        )
+
+    def _test_execution(
+        self,
+        input: str,
+        expected_statement_count: int | None = None,
+    ) -> ProgramNode:
+        lexer = Lexer(input)
+        parser = Parser(lexer)
+        program = parser.parse_program()
+        self.check_parser_errors(parser)
+        self.assertIsNotNone(program)
+        assert program is not None
+        if expected_statement_count is not None:
+            self.assertEqual(expected_statement_count, len(program.statements))
+        return program
+
+    def _test_integer_literal(
+        self, expression: ExpressionNode | None, value: int
+    ) -> bool:
+        self.assertIsInstance(expression, IntegerLiteralExpression)
+        integer = cast(IntegerLiteralExpression, expression)
+        self.assertEqual(value, integer.value)
+        self.assertEqual(f"{integer.value}", integer.token_literal())
+        return True
+
+    def _test_identifier_literal(self, expression: ExpressionNode, value: str) -> bool:
+        self.assertIsInstance(expression, IdentifierExpression)
+        identifier = cast(IdentifierExpression, expression)
+        self.assertEqual(value, identifier.value)
+        self.assertEqual(value, identifier.token_literal())
+        return True
+
+    def _test_infix_expression(
+        self,
+        expression: ExpressionNode,
+        left: int | str,
+        operator: str,
+        right: int | str,
+    ) -> bool:
+        self.assertIsInstance(expression, InfixExpression)
+        infix = cast(InfixExpression, expression)
+        if not (infix.left and infix.right):
+            return False
+        self.assertTrue(self._test_literal_expression(infix.left, left))
+        self.assertEqual(operator, infix.operator)
+        self.assertTrue(self._test_literal_expression(infix.right, right))
+        return True
+
+    def _test_literal_expression(
+        self, expression: ExpressionNode, expected: int | str
+    ) -> bool:
+        match type(expected).__name__:
+            case "int":
+                return self._test_integer_literal(expression, cast(int, expected))
+            case "str":
+                return self._test_identifier_literal(expression, cast(str, expected))
+        return False
 
 
-def test_integer_literal(
-    test_case: unittest.TestCase, expression: ExpressionNode | None, value: int
-) -> bool:
-    test_case.assertIsInstance(expression, IntegerLiteralExpression)
-    integer = cast(IntegerLiteralExpression, expression)
-    test_case.assertEqual(value, integer.value)
-    test_case.assertEqual(f"{integer.value}", integer.token_literal())
-    return True
-
-
-class TestLetStatements(unittest.TestCase):
+class TestLetStatements(ParserTestCase):
     def _test_let_statement(self, statement: StatementNode, name: str) -> bool:
         self.assertEqual("let", statement.token_literal())
         self.assertIsInstance(statement, LetStatement)
@@ -52,46 +101,32 @@ let x = 5;
 let y = 10;
 let foobar = 838383;
 """
-        lexer = Lexer(input)
-        parser = Parser(lexer)
-        program = parser.parse_program()
-        check_parser_errors(self, parser)
-        self.assertIsNotNone(program)
-        self.assertEqual(3, len(program.statements))
+        program = self._test_execution(input, 3)
 
         for i, expected in enumerate(["x", "y", "foobar"]):
             statement = program.statements[i]
             self.assertTrue(self._test_let_statement(statement, expected))
+            # self.assertTrue(test_literal_expression(self, cast(LetStatement, statement).value, expected))
 
 
-class TestReturnStatements(unittest.TestCase):
+class TestReturnStatements(ParserTestCase):
     def test_return_statements(self):
         input = r"""
 return 5;
 return 10;
 return 993322;
 """
-        lexer = Lexer(input)
-        parser = Parser(lexer)
-        program = parser.parse_program()
-        check_parser_errors(self, parser)
-        self.assertIsNotNone(program)
-        self.assertEqual(3, len(program.statements))
+        program = self._test_execution(input, 3)
 
         for statement in program.statements:
             self.assertIsInstance(statement, ReturnStatement)
             self.assertEqual(statement.token_literal(), "return")
 
 
-class TestIdentifierExpressions(unittest.TestCase):
+class TestIdentifierExpressions(ParserTestCase):
     def test_identifier_expressions(self):
         input = "foobar;"
-        lexer = Lexer(input)
-        parser = Parser(lexer)
-        program = parser.parse_program()
-        check_parser_errors(self, parser)
-        self.assertIsNotNone(program)
-        self.assertEqual(1, len(program.statements))
+        program = self._test_execution(input, 1)
 
         statement = program.statements[0]
         self.assertIsInstance(statement, ExpressionStatement)
@@ -103,15 +138,10 @@ class TestIdentifierExpressions(unittest.TestCase):
         self.assertEqual("foobar", identifier.token_literal())
 
 
-class TestIntegerLiteralExpressions(unittest.TestCase):
-    def test_integer_literal(self):
+class TestIntegerLiteralExpressions(ParserTestCase):
+    def _test_integer_literal(self):
         input = "5;"
-        lexer = Lexer(input)
-        parser = Parser(lexer)
-        program = parser.parse_program()
-        check_parser_errors(self, parser)
-        self.assertIsNotNone(program)
-        self.assertEqual(1, len(program.statements))
+        program = self._test_execution(input, 1)
 
         statement = program.statements[0]
         self.assertIsInstance(statement, ExpressionStatement)
@@ -123,17 +153,10 @@ class TestIntegerLiteralExpressions(unittest.TestCase):
         self.assertEqual("5", literal.token_literal())
 
 
-class TestParsingPrefixExpressions(unittest.TestCase):
+class TestParsingPrefixExpressions(ParserTestCase):
     @parameterized.expand([("!5", "!", 5), ("-15", "-", 15)])
     def test_parsing_prefix_expressions(self, input: str, operator: str, value: int):
-        lexer = Lexer(input)
-        parser = Parser(lexer)
-        program = parser.parse_program()
-        check_parser_errors(self, parser)
-        self.assertIsNotNone(program)
-        if not program:
-            return
-        self.assertEqual(1, len(program.statements))
+        program = self._test_execution(input, 1)
 
         statement = program.statements[0]
         self.assertIsInstance(statement, ExpressionStatement)
@@ -142,10 +165,11 @@ class TestParsingPrefixExpressions(unittest.TestCase):
         self.assertIsInstance(expression, PrefixExpression)
         expression = cast(PrefixExpression, expression)
         self.assertEqual(operator, expression.operator)
-        self.assertTrue(test_integer_literal(self, expression.right, value))
+        assert expression.right is not None
+        self.assertTrue(self._test_literal_expression(expression.right, value))
 
 
-class TestParsingInfixExpressions(unittest.TestCase):
+class TestParsingInfixExpressions(ParserTestCase):
     @parameterized.expand(
         [
             ("5 + 5;", 5, "+", 5),
@@ -161,14 +185,7 @@ class TestParsingInfixExpressions(unittest.TestCase):
     def test_parsing_infix_expressions(
         self, input: str, left: int, operator: str, right: int
     ):
-        lexer = Lexer(input)
-        parser = Parser(lexer)
-        program = parser.parse_program()
-        check_parser_errors(self, parser)
-        self.assertIsNotNone(program)
-        if not program:
-            return
-        self.assertEqual(1, len(program.statements))
+        program = self._test_execution(input, 1)
 
         statement = program.statements[0]
         self.assertIsInstance(statement, ExpressionStatement)
@@ -176,12 +193,14 @@ class TestParsingInfixExpressions(unittest.TestCase):
         expression = statement.expression
         self.assertIsInstance(expression, InfixExpression)
         expression = cast(InfixExpression, expression)
-        self.assertTrue(test_integer_literal(self, expression.left, left))
+        assert expression.left is not None
+        self.assertTrue(self._test_literal_expression(expression.left, left))
         self.assertEqual(operator, expression.operator)
-        self.assertTrue(test_integer_literal(self, expression.right, right))
+        assert expression.right is not None
+        self.assertTrue(self._test_literal_expression(expression.right, right))
 
 
-class TestOperatorPrecedenceParsing(unittest.TestCase):
+class TestOperatorPrecedenceParsing(ParserTestCase):
     @parameterized.expand(
         [
             ("-a * b", "((-a) * b)"),
@@ -199,11 +218,5 @@ class TestOperatorPrecedenceParsing(unittest.TestCase):
         ]
     )
     def test_operator_precedence_parsing(self, input: str, expected: str):
-        lexer = Lexer(input)
-        parser = Parser(lexer)
-        program = parser.parse_program()
-        check_parser_errors(self, parser)
-        self.assertIsNotNone(program)
-        if not program:
-            return
+        program = self._test_execution(input)
         self.assertEqual(expected, str(program))
