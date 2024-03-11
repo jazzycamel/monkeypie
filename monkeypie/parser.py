@@ -14,6 +14,7 @@ from monkeypie.ast import (
     IntegerLiteralExpression,
     PrefixExpression,
     InfixExpression,
+    BooleanLiteralExpression,
 )
 from monkeypie.lexer import Lexer
 from monkeypie.token import Token, TokenType
@@ -90,6 +91,15 @@ class Parser:
         )
         self.register_prefix_parse_function(
             TokenType.MINUS, self.parse_prefix_expression
+        )
+        self.register_prefix_parse_function(
+            TokenType.TRUE, self.parse_boolean_literal_expression
+        )
+        self.register_prefix_parse_function(
+            TokenType.FALSE, self.parse_boolean_literal_expression
+        )
+        self.register_prefix_parse_function(
+            TokenType.LPAREN, self.parse_grouped_expression
         )
 
         self.register_infix_parse_function(TokenType.PLUS, self.parse_infix_expression)
@@ -267,4 +277,18 @@ class Parser:
         precedence = self.current_precedence()
         self.next_token()
         expression.right = self.parse_expression(precedence)
+        return expression
+
+    @Trace
+    def parse_boolean_literal_expression(self) -> ExpressionNode:
+        return BooleanLiteralExpression(
+            self.current_token, self.current_token_is(TokenType.TRUE)
+        )
+
+    @Trace
+    def parse_grouped_expression(self) -> ExpressionNode | None:
+        self.next_token()
+        expression = self.parse_expression(Precedence.LOWEST)
+        if not self.expect_peek(TokenType.RPAREN):
+            return None
         return expression

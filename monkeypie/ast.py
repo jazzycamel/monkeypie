@@ -141,3 +141,17 @@ class InfixExpression(ExpressionNode):
 
     def __str__(self) -> str:
         return f"({str(self.left)} {str(self.operator)} {str(self.right)})"
+
+
+class BooleanLiteralExpression(ExpressionNode):
+    def __init__(
+        self, token: Token = Token(TokenType.ILLEGAL, ""), value: bool = False
+    ):
+        self.token = token
+        self.value = value
+
+    def token_literal(self) -> str:
+        return self.token.literal
+
+    def __str__(self) -> str:
+        return self.token.literal

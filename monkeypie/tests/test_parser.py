@@ -14,6 +14,7 @@ from monkeypie.ast import (
     ExpressionNode,
     InfixExpression,
     ProgramNode,
+    BooleanLiteralExpression,
 )
 from monkeypie.lexer import Lexer
 from monkeypie.parser import Parser
@@ -59,6 +60,13 @@ class ParserTestCase(unittest.TestCase):
         self.assertEqual(value, identifier.token_literal())
         return True
 
+    def _test_boolean_literal(self, expression: ExpressionNode, value: bool) -> bool:
+        self.assertIsInstance(expression, BooleanLiteralExpression)
+        boolean = cast(BooleanLiteralExpression, expression)
+        self.assertEqual(value, boolean.value)
+        self.assertEqual(str(boolean.value).lower(), boolean.token_literal())
+        return True
+
     def _test_infix_expression(
         self,
         expression: ExpressionNode,
@@ -76,13 +84,15 @@ class ParserTestCase(unittest.TestCase):
         return True
 
     def _test_literal_expression(
-        self, expression: ExpressionNode, expected: int | str
+        self, expression: ExpressionNode, expected: int | str | bool
     ) -> bool:
         match type(expected).__name__:
             case "int":
                 return self._test_integer_literal(expression, cast(int, expected))
             case "str":
                 return self._test_identifier_literal(expression, cast(str, expected))
+            case "bool":
+                return self._test_boolean_literal(expression, cast(bool, expected))
         return False
 
 
@@ -139,7 +149,7 @@ class TestIdentifierExpressions(ParserTestCase):
 
 
 class TestIntegerLiteralExpressions(ParserTestCase):
-    def _test_integer_literal(self):
+    def test_integer_literal(self):
         input = "5;"
         program = self._test_execution(input, 1)
 
@@ -154,7 +164,9 @@ class TestIntegerLiteralExpressions(ParserTestCase):
 
 
 class TestParsingPrefixExpressions(ParserTestCase):
-    @parameterized.expand([("!5", "!", 5), ("-15", "-", 15)])
+    @parameterized.expand(
+        [("!5", "!", 5), ("-15", "-", 15), ("!true", "!", True), ("!false", "!", False)]
+    )
     def test_parsing_prefix_expressions(self, input: str, operator: str, value: int):
         program = self._test_execution(input, 1)
 
@@ -180,24 +192,21 @@ class TestParsingInfixExpressions(ParserTestCase):
             ("5 < 5;", 5, "<", 5),
             ("5 == 5;", 5, "==", 5),
             ("5 != 5;", 5, "!=", 5),
+            ("true == true", True, "==", True),
+            ("true != false", True, "!=", False),
+            ("false == false", False, "==", False),
         ]
     )
     def test_parsing_infix_expressions(
-        self, input: str, left: int, operator: str, right: int
+        self, input: str, left: int | bool, operator: str, right: int | bool
     ):
         program = self._test_execution(input, 1)
 
         statement = program.statements[0]
         self.assertIsInstance(statement, ExpressionStatement)
         statement = cast(ExpressionStatement, statement)
-        expression = statement.expression
-        self.assertIsInstance(expression, InfixExpression)
-        expression = cast(InfixExpression, expression)
-        assert expression.left is not None
-        self.assertTrue(self._test_literal_expression(expression.left, left))
-        self.assertEqual(operator, expression.operator)
-        assert expression.right is not None
-        self.assertTrue(self._test_literal_expression(expression.right, right))
+        assert statement.expression is not None
+        self._test_infix_expression(statement.expression, left, operator, right)
 
 
 class TestOperatorPrecedenceParsing(ParserTestCase):
@@ -215,8 +224,29 @@ class TestOperatorPrecedenceParsing(ParserTestCase):
             ("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
             ("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"),
             ("3 + 4 * 5 == 3 * 1 + 4 * 5", "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))"),
+            ("true", "true"),
+            ("false", "false"),
+            ("3 > 5 == false", "((3 > 5) == false)"),
+            ("3 < 5 == true", "((3 < 5) == true)"),
+            ("1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)"),
+            ("(5 + 5) * 2", "((5 + 5) * 2)"),
+            ("2 / (5 + 5)", "(2 / (5 + 5))"),
+            ("-(5 + 5)", "(-(5 + 5))"),
+            ("!(true == true)", "(!(true == true))"),
         ]
     )
     def test_operator_precedence_parsing(self, input: str, expected: str):
         program = self._test_execution(input)
         self.assertEqual(expected, str(program))
+
+
+class TestBooleanLiteralExpressions(ParserTestCase):
+    @parameterized.expand([("true", True), ("false", False)])
+    def test_boolean_literal_expressions(self, input, expected: bool):
+        program = self._test_execution(input, 1)
+
+        statement = program.statements[0]
+        self.assertIsInstance(statement, ExpressionStatement)
+        statement = cast(ExpressionStatement, statement)
+        assert statement.expression is not None
+        self._test_boolean_literal(statement.expression, expected)
