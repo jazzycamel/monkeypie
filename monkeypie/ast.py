@@ -208,3 +208,21 @@ class FunctionLiteralExpression(ExpressionNode):
 
     def __str__(self) -> str:
         return f"{self.token.literal}({', '.join(str(p) for p in self.parameters)}) {str(self.body)}"
+
+
+class CallExpression(ExpressionNode):
+    def __init__(
+        self,
+        token: Token = Token(TokenType.ILLEGAL, ""),
+        function: ExpressionNode | None = None,
+        arguments: list[ExpressionNode] = [],
+    ):
+        self.token = token
+        self.function = function
+        self.arguments = arguments
+
+    def token_literal(self) -> str:
+        return self.token.literal
+
+    def __str__(self) -> str:
+        return f"{str(self.function)}({', '.join(str(a) for a in self.arguments)})"

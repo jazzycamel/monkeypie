@@ -18,6 +18,7 @@ from monkeypie.ast import (
     IfExpression,
     BlockStatement,
     FunctionLiteralExpression,
+    CallExpression,
 )
 from monkeypie.lexer import Lexer
 from monkeypie.token import Token, TokenType
@@ -45,6 +46,7 @@ PRECEDENCES: Final[dict[TokenType, Precedence]] = {
     TokenType.MINUS: Precedence.SUM,
     TokenType.SLASH: Precedence.PRODUCT,
     TokenType.ASTERISK: Precedence.PRODUCT,
+    TokenType.LPAREN: Precedence.CALL,
 }
 
 
@@ -121,6 +123,7 @@ class Parser:
         )
         self.register_infix_parse_function(TokenType.LT, self.parse_infix_expression)
         self.register_infix_parse_function(TokenType.GT, self.parse_infix_expression)
+        self.register_infix_parse_function(TokenType.LPAREN, self.parse_call_expression)
 
         self.next_token()
         self.next_token()
@@ -202,8 +205,9 @@ class Parser:
         if not self.expect_peek(TokenType.ASSIGN):
             return None
 
-        # TODO: skip expressions until semicolon
-        while not self.current_token_is(TokenType.SEMICOLON):
+        self.next_token()
+        statement.value = self.parse_expression(Precedence.LOWEST)
+        if self.peek_token_is(TokenType.SEMICOLON):
             self.next_token()
 
         return statement
@@ -213,8 +217,8 @@ class Parser:
 
         self.next_token()
 
-        # TODO: skip expressions until semicolon
-        while not self.current_token_is(TokenType.SEMICOLON):
+        statement.return_value = self.parse_expression(Precedence.LOWEST)
+        if self.peek_token_is(TokenType.SEMICOLON):
             self.next_token()
 
         return statement
@@ -364,3 +368,24 @@ class Parser:
         if not self.expect_peek(TokenType.RPAREN):
             return []
         return identifiers
+
+    @Trace
+    def parse_call_expression(self, function: ExpressionNode) -> ExpressionNode | None:
+        expression = CallExpression(self.current_token, function)
+        expression.arguments = self.parse_call_arguments()
+        return expression
+
+    def parse_call_arguments(self) -> list[ExpressionNode]:
+        arguments: list[ExpressionNode] = []
+        if self.peek_token_is(TokenType.RPAREN):
+            self.next_token()
+            return arguments
+        self.next_token()
+        arguments.append(self.parse_expression(Precedence.LOWEST))
+        while self.peek_token_is(TokenType.COMMA):
+            self.next_token()
+            self.next_token()
+            arguments.append(self.parse_expression(Precedence.LOWEST))
+        if not self.expect_peek(TokenType.RPAREN):
+            return []
+        return arguments

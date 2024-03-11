@@ -17,6 +17,7 @@ from monkeypie.ast import (
     BooleanLiteralExpression,
     IfExpression,
     FunctionLiteralExpression,
+    CallExpression,
 )
 from monkeypie.lexer import Lexer
 from monkeypie.parser import Parser
@@ -107,32 +108,39 @@ class TestLetStatements(ParserTestCase):
         self.assertTrue(statement.name.token_literal(), name)
         return True
 
-    def test_let_statements(self):
-        input = r"""
-let x = 5;
-let y = 10;
-let foobar = 838383;
-"""
-        program = self._test_execution(input, 3)
+    @parameterized.expand(
+        [
+            ("let x = 5;", "x", 5),
+            ("let y = true;", "y", True),
+            ("let foobar = y;", "foobar", "y"),
+        ]
+    )
+    def test_let_statements(
+        self, input: str, expected_name: str, expected_value: int | str | bool
+    ):
+        program = self._test_execution(input, 1)
 
-        for i, expected in enumerate(["x", "y", "foobar"]):
-            statement = program.statements[i]
-            self.assertTrue(self._test_let_statement(statement, expected))
-            # self.assertTrue(test_literal_expression(self, cast(LetStatement, statement).value, expected))
+        statement = program.statements[0]
+        self.assertTrue(self._test_let_statement(statement, expected_name))
+        value = cast(LetStatement, statement).value
+        assert value is not None
+        self.assertTrue(self._test_literal_expression(value, expected_value))
 
 
 class TestReturnStatements(ParserTestCase):
-    def test_return_statements(self):
-        input = r"""
-return 5;
-return 10;
-return 993322;
-"""
-        program = self._test_execution(input, 3)
-
-        for statement in program.statements:
-            self.assertIsInstance(statement, ReturnStatement)
-            self.assertEqual(statement.token_literal(), "return")
+    @parameterized.expand(
+        [
+            ("return 5;", 5),
+            ("return true;", True),
+            ("return foobar;", "foobar"),
+        ]
+    )
+    def test_return_statements(self, input: str, expected_value: int | str | bool):
+        program = self._test_execution(input, 1)
+        statement = program.statements[0]
+        return_value = cast(ReturnStatement, statement).return_value
+        assert return_value is not None
+        self.assertTrue(self._test_literal_expression(return_value, expected_value))
 
 
 class TestIdentifierExpressions(ParserTestCase):
@@ -235,6 +243,12 @@ class TestOperatorPrecedenceParsing(ParserTestCase):
             ("2 / (5 + 5)", "(2 / (5 + 5))"),
             ("-(5 + 5)", "(-(5 + 5))"),
             ("!(true == true)", "(!(true == true))"),
+            ("a + add(b * c) + d", "((a + add((b * c))) + d)"),
+            (
+                "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))",
+                "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))",
+            ),
+            ("add(a + b + c * d / f + g)", "add((((a + b) + ((c * d) / f)) + g))"),
         ]
     )
     def test_operator_precedence_parsing(self, input: str, expected: str):
@@ -341,3 +355,21 @@ class TestFunctionLiteralExpressions(ParserTestCase):
             self.assertTrue(
                 self._test_literal_expression(expression.parameters[i], expected)
             )
+
+
+class TestCallExpressionParsing(ParserTestCase):
+    def test_call_expression_parsing(self):
+        input = "add(1, 2 * 3, 4 + 5);"
+        program = self._test_execution(input, 1)
+
+        statement = program.statements[0]
+        self.assertIsInstance(statement, ExpressionStatement)
+        statement = cast(ExpressionStatement, statement)
+        expression = statement.expression
+        self.assertIsInstance(expression, CallExpression)
+        expression = cast(CallExpression, expression)
+        self.assertTrue(self._test_identifier_literal(expression.function, "add"))
+        self.assertEqual(3, len(expression.arguments))
+        self.assertTrue(self._test_literal_expression(expression.arguments[0], 1))
+        self.assertTrue(self._test_infix_expression(expression.arguments[1], 2, "*", 3))
+        self.assertTrue(self._test_infix_expression(expression.arguments[2], 4, "+", 5))
